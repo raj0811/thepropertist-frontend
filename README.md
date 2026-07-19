@@ -1,16 +1,251 @@
-# React + Vite
+# The Propertist Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Frontend application for The Propertist property listing platform.
 
-Currently, two official plugins are available:
+Users can browse and filter properties, view property details, and submit enquiries. Agents can register, log in, manage property listings, upload property images, and view received enquiries.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Technologies Used
 
-## React Compiler
+- React
+- TypeScript
+- Vite
+- Tailwind CSS
+- React Router
+- Axios
+- React Toastify
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Features
 
-## Expanding the ESLint configuration
+- Public property listing
+- Search properties by location
+- Filter properties by BHK, price, status and listing type
+- Property details page
+- General and property-specific enquiries
+- Agent login and registration
+- Protected agent dashboard
+- Agent profile
+- Add, edit and delete properties
+- Upload up to five property images
+- View agent enquiries
+- Pagination
+- Responsive design
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Prerequisites
+
+Make sure the following are installed:
+
+- Node.js 20 or later
+- npm
+- The Propertist backend running locally
+
+Check your installed versions:
+
+```bash
+node --version
+npm --version
+```
+
+## Installation
+
+Clone the frontend repository:
+
+```bash
+git clone repo link
+```
+
+Open the project directory:
+
+```bash
+cd folder name
+```
+
+Install the dependencies:
+
+```bash
+npm install
+```
+
+## Environment Setup
+
+Create a `.env` file in the project root:
+
+```text
+propertist-frontend/
+├── src/
+├── package.json
+├── vite.config.ts
+├── .env
+└── README.md
+```
+
+Add the local backend URL to `.env`:
+
+```env
+VITE_API_URL=http://localhost:4000
+```
+
+Make sure the backend is running on port `4000`.
+
+Only variables beginning with `VITE_` can be accessed by the Vite frontend.
+
+The API URL is accessed in the application using:
+
+```ts
+const API_URL =
+    import.meta.env.VITE_API_URL ||
+    "http://localhost:4000";
+```
+
+## Sample Environment File
+
+Create an `.env.example` file:
+
+```env
+VITE_API_URL=http://localhost:4000
+```
+
+Do not put secrets such as AWS keys, database credentials or JWT secrets in frontend environment files.
+
+## Start the Backend
+
+Before running the frontend, start the backend project:
+
+```bash
+npm run start:dev
+```
+
+The backend should run at:
+
+```text
+http://localhost:4000
+```
+
+## Start the Frontend
+
+Run the development server:
+
+```bash
+npm run dev
+```
+
+The terminal will show the frontend URL, normally:
+
+```text
+http://localhost:5173
+```
+
+Open this URL in your browser.
+
+## Build the Project
+
+Create a production build:
+
+```bash
+npm run build
+```
+
+The compiled frontend will be created inside:
+
+```text
+dist/
+```
+
+## Preview the Production Build
+
+Preview the compiled application locally:
+
+```bash
+npm run preview
+```
+
+## Available Commands
+
+```text
+npm run dev       Start the development server
+npm run build     Create the production build
+npm run preview   Preview the production build
+npm run lint      Run ESLint
+```
+
+## Backend CORS Setup
+
+The backend must allow requests from the local frontend URL:
+
+```ts
+app.enableCors({
+    origin: [
+        "http://localhost:5173",
+        "http://localhost:5174",
+    ],
+    credentials: true,
+});
+```
+
+
+## Application Routes
+
+```text
+/home                   Property listing page
+/about                  About page
+/properties/:id         Property details page
+/dashboard              Agent dashboard
+/login                  Agent login page
+```
+
+The home page and property details are public. The dashboard requires agent authentication.
+
+## Property Image Upload
+
+Agents can upload property images when adding or editing a property.
+
+Image upload process:
+
+1. The agent selects an image.
+2. The frontend converts it to Base64.
+3. The Base64 image is sent to the backend.
+4. The backend uploads the image to AWS S3.
+5. The backend returns the uploaded image URL.
+6. The frontend stores the URL in the property images array.
+7. The images array is sent when creating or editing the property.
+
+Supported formats:
+
+```text
+JPG
+PNG
+WebP
+```
+
+Maximum image size:
+
+```text
+2 MB
+```
+
+Maximum images per property:
+
+```text
+5
+```
+
+## Git Ignore
+
+Make sure `.gitignore` contains:
+
+```gitignore
+node_modules/
+dist/
+
+.env
+.env.*
+!.env.example
+
+*.local
+*.log
+
+.vscode/
+.idea/
+
+.DS_Store
+Thumbs.db
+```
