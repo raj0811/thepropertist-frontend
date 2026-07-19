@@ -2,6 +2,7 @@ import axios from "axios";
 import {
     useEffect,
     useState,
+    type ChangeEvent,
     type FormEvent,
 } from "react";
 import { toast } from "react-toastify";
@@ -35,10 +36,12 @@ export type EditableProperty = {
     images: string[];
     estimatedPrice: number;
     negotiable: boolean;
+
     propertyAgeType:
     | "NEW"
     | "UNDER_CONSTRUCTION"
     | "EXISTING";
+
     propertyAgeInYears?: number;
     googleMapLocation?: string;
 };
@@ -50,9 +53,21 @@ type EditPropertyModalProps = {
     onSuccess: () => void;
 };
 
+type UploadImageResponse = {
+    success: boolean;
+    message: string;
+    data: {
+        key: string;
+        url: string;
+    };
+};
+
 const API_URL =
     import.meta.env.VITE_API_URL ||
     "http://localhost:4000";
+
+const IMAGE_UPLOAD_ENDPOINT =
+    `${API_URL}/properties/property-image`;
 
 const availableBenefits = [
     "GATED_SOCIETY",
@@ -61,108 +76,229 @@ const availableBenefits = [
     "PARK",
 ];
 
+const initialForm = {
+    name: "",
+    address: "",
+    city: "",
+    state: "",
+    pincode: "",
+    listingType: "SELL",
+    carpetArea: "",
+    carpetAreaUnit: "SQ_FT",
+    configuration: "1BHK",
+    benefits: [] as string[],
+    nearestStationName: "",
+    nearestStationDistance: "",
+    description: "",
+    estimatedPrice: "",
+    negotiable: false,
+    propertyAgeType: "NEW",
+    propertyAgeInYears: "",
+    googleMapLocation: "",
+};
+
+const convertFileToBase64 = (
+    file: File,
+): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+
+        reader.onload = () => {
+            if (typeof reader.result === "string") {
+                resolve(reader.result);
+            } else {
+                reject(
+                    new Error(
+                        "Unable to read the image",
+                    ),
+                );
+            }
+        };
+
+        reader.onerror = () => {
+            reject(
+                new Error(
+                    "Unable to read the image",
+                ),
+            );
+        };
+
+        reader.readAsDataURL(file);
+    });
+};
+
+const getErrorMessage = (
+    error: unknown,
+    fallback: string,
+) => {
+    if (axios.isAxiosError(error)) {
+        const message =
+            error.response?.data?.message;
+
+        if (Array.isArray(message)) {
+            return message[0];
+        }
+
+        return message || fallback;
+    }
+
+    if (error instanceof Error) {
+        return error.message;
+    }
+
+    return fallback;
+};
+
 const EditPropertyModal = ({
     isOpen,
     property,
     onClose,
     onSuccess,
 }: EditPropertyModalProps) => {
+    const [form, setForm] =
+        useState(initialForm);
+
+    const [uploadedImages, setUploadedImages] =
+        useState<string[]>([]);
+
+    const [isUploadingImage, setIsUploadingImage] =
+        useState(false);
+
     const [isSubmitting, setIsSubmitting] =
         useState(false);
 
-    const [form, setForm] = useState({
-        name: "",
-        address: "",
-        city: "",
-        state: "",
-        pincode: "",
-        listingType: "SELL",
-        carpetArea: "",
-        carpetAreaUnit: "SQ_FT",
-        configuration: "1BHK",
-        benefits: [] as string[],
-        nearestStationName: "",
-        nearestStationDistance: "",
-        description: "",
-        imageUrls: "",
-        estimatedPrice: "",
-        negotiable: false,
-        propertyAgeType: "NEW",
-        propertyAgeInYears: "",
-        googleMapLocation: "",
-    });
-
     useEffect(() => {
-        if (!property) return;
+        if (!property || !isOpen) return;
 
         setForm({
             name: property.name || "",
-            address: property.address?.address || "",
-            city: property.address?.city || property.city || "",
-            state: property.address?.state || "",
-            pincode: property.address?.pincode || "",
-            listingType: property.listingType || "SELL",
-            carpetArea: String(property.carpetArea || ""),
+
+            address:
+                property.address?.address || "",
+
+            city:
+                property.address?.city ||
+                property.city ||
+                "",
+
+            state:
+                property.address?.state || "",
+
+            pincode:
+                property.address?.pincode || "",
+
+            listingType:
+                property.listingType || "SELL",
+
+            carpetArea:
+                property.carpetArea !== undefined
+                    ? String(property.carpetArea)
+                    : "",
+
             carpetAreaUnit:
-                property.carpetAreaUnit || "SQ_FT",
+                property.carpetAreaUnit ||
+                "SQ_FT",
+
             configuration:
-                property.configuration || "1BHK",
-            benefits: property.benefits || [],
+                property.configuration ||
+                "1BHK",
+
+            benefits:
+                property.benefits || [],
+
             nearestStationName:
-                property.nearestStation?.name || "",
+                property.nearestStation?.name ||
+                "",
+
             nearestStationDistance:
-                property.nearestStation?.distanceInKm !==
-                    undefined
+                property.nearestStation
+                    ?.distanceInKm !== undefined
                     ? String(
-                        property.nearestStation.distanceInKm,
+                        property.nearestStation
+                            .distanceInKm,
                     )
                     : "",
-            description: property.description || "",
-            imageUrls:
-                property.images?.join(", ") || "",
-            estimatedPrice: String(
-                property.estimatedPrice || "",
-            ),
+
+            description:
+                property.description || "",
+
+            estimatedPrice:
+                property.estimatedPrice !==
+                    undefined
+                    ? String(
+                        property.estimatedPrice,
+                    )
+                    : "",
+
             negotiable:
                 property.negotiable || false,
+
             propertyAgeType:
-                property.propertyAgeType || "NEW",
+                property.propertyAgeType ||
+                "NEW",
+
             propertyAgeInYears:
-                property.propertyAgeInYears !== undefined
-                    ? String(property.propertyAgeInYears)
+                property.propertyAgeInYears !==
+                    undefined
+                    ? String(
+                        property.propertyAgeInYears,
+                    )
                     : "",
+
             googleMapLocation:
                 property.googleMapLocation || "",
         });
-    }, [property]);
+
+        // Load old property images.
+        setUploadedImages(
+            property.images || [],
+        );
+    }, [property, isOpen]);
 
     useEffect(() => {
         if (!isOpen) return;
 
-        const handleEscape = (event: KeyboardEvent) => {
-            if (event.key === "Escape") {
+        const handleEscape = (
+            event: KeyboardEvent,
+        ) => {
+            if (
+                event.key === "Escape" &&
+                !isSubmitting &&
+                !isUploadingImage
+            ) {
                 onClose();
             }
         };
 
-        document.body.style.overflow = "hidden";
-        window.addEventListener("keydown", handleEscape);
+        document.body.style.overflow =
+            "hidden";
+
+        window.addEventListener(
+            "keydown",
+            handleEscape,
+        );
 
         return () => {
             document.body.style.overflow = "";
+
             window.removeEventListener(
                 "keydown",
                 handleEscape,
             );
         };
-    }, [isOpen, onClose]);
+    }, [
+        isOpen,
+        isSubmitting,
+        isUploadingImage,
+        onClose,
+    ]);
 
     if (!isOpen || !property) {
         return null;
     }
 
     const updateForm = (
-        field: keyof typeof form,
+        field: keyof typeof initialForm,
         value: string | boolean | string[],
     ) => {
         setForm((current) => ({
@@ -176,12 +312,127 @@ const EditPropertyModal = ({
     ) => {
         setForm((current) => ({
             ...current,
-            benefits: current.benefits.includes(benefit)
-                ? current.benefits.filter(
-                    (item) => item !== benefit,
+
+            benefits:
+                current.benefits.includes(
+                    benefit,
                 )
-                : [...current.benefits, benefit],
+                    ? current.benefits.filter(
+                        (item) =>
+                            item !== benefit,
+                    )
+                    : [
+                        ...current.benefits,
+                        benefit,
+                    ],
         }));
+    };
+
+    const handleImageUpload = async (
+        event: ChangeEvent<HTMLInputElement>,
+    ) => {
+        const file =
+            event.target.files?.[0];
+
+        event.target.value = "";
+
+        if (!file) return;
+
+        if (uploadedImages.length >= 5) {
+            toast.error(
+                "You can upload a maximum of 5 images",
+            );
+            return;
+        }
+
+        const allowedTypes = [
+            "image/jpeg",
+            "image/png",
+            "image/webp",
+        ];
+
+        if (!allowedTypes.includes(file.type)) {
+            toast.error(
+                "Only JPG, PNG and WebP images are allowed",
+            );
+            return;
+        }
+
+        const maximumSize =
+            5 * 1024 * 1024;
+
+        if (file.size > maximumSize) {
+            toast.error(
+                "Image size cannot exceed 5 MB",
+            );
+            return;
+        }
+
+        const token =
+            localStorage.getItem("token");
+
+        if (!token) {
+            toast.error(
+                "Please log in to upload images",
+            );
+            return;
+        }
+
+        try {
+            setIsUploadingImage(true);
+
+            const base64 =
+                await convertFileToBase64(file);
+
+            const response =
+                await axios.post<UploadImageResponse>(
+                    IMAGE_UPLOAD_ENDPOINT,
+                    {
+                        base64,
+                    },
+                    {
+                        headers: {
+                            Authorization:
+                                `Bearer ${token}`,
+
+                            "Content-Type":
+                                "application/json",
+                        },
+                    },
+                );
+
+            const newImageUrl =
+                response.data.data.url;
+
+            setUploadedImages((current) => [
+                ...current,
+                newImageUrl,
+            ]);
+
+            toast.success(
+                "Image uploaded successfully",
+            );
+        } catch (error: unknown) {
+            toast.error(
+                getErrorMessage(
+                    error,
+                    "Unable to upload image",
+                ),
+            );
+        } finally {
+            setIsUploadingImage(false);
+        }
+    };
+
+    const removeImage = (
+        imageIndex: number,
+    ) => {
+        setUploadedImages((current) =>
+            current.filter(
+                (_, index) =>
+                    index !== imageIndex,
+            ),
+        );
     };
 
     const handleSubmit = async (
@@ -194,50 +445,83 @@ const EditPropertyModal = ({
             property.address?.propertyId;
 
         if (!propertyId) {
-            toast.error("Property ID is missing");
+            toast.error(
+                "Property ID is missing",
+            );
+            return;
+        }
+
+        const token =
+            localStorage.getItem("token");
+
+        if (!token) {
+            toast.error(
+                "Please log in to edit the property",
+            );
+            return;
+        }
+
+        if (isUploadingImage) {
+            toast.error(
+                "Please wait for the image upload to finish",
+            );
+            return;
+        }
+
+        if (uploadedImages.length === 0) {
+            toast.error(
+                "Please keep at least one property image",
+            );
             return;
         }
 
         try {
             setIsSubmitting(true);
 
-            const token =
-                localStorage.getItem("token");
-
-            if (!token) {
-                toast.error(
-                    "Please log in to edit the property",
-                );
-                return;
-            }
-
-            const requestBody: Record<string, unknown> = {
+            const requestBody:
+                Record<string, unknown> = {
                 name: form.name.trim(),
 
                 address: {
-                    address: form.address.trim(),
+                    address:
+                        form.address.trim(),
+
                     city: form.city.trim(),
-                    state: form.state.trim(),
-                    pincode: form.pincode.trim(),
+
+                    state:
+                        form.state.trim(),
+
+                    pincode:
+                        form.pincode.trim(),
                 },
 
-                listingType: form.listingType,
-                carpetArea: Number(form.carpetArea),
-                carpetAreaUnit: form.carpetAreaUnit,
-                configuration: form.configuration,
-                benefits: form.benefits,
-                description: form.description.trim(),
+                listingType:
+                    form.listingType,
 
-                images: form.imageUrls
-                    .split(",")
-                    .map((url) => url.trim())
-                    .filter(Boolean),
+                carpetArea: Number(
+                    form.carpetArea,
+                ),
+
+                carpetAreaUnit:
+                    form.carpetAreaUnit,
+
+                configuration:
+                    form.configuration,
+
+                benefits: form.benefits,
+
+                description:
+                    form.description.trim(),
+
+                // Old remaining images and new images.
+                images: uploadedImages,
 
                 estimatedPrice: Number(
                     form.estimatedPrice,
                 ),
 
-                negotiable: form.negotiable,
+                negotiable:
+                    form.negotiable,
 
                 propertyAgeType:
                     form.propertyAgeType,
@@ -252,7 +536,9 @@ const EditPropertyModal = ({
                 form.nearestStationDistance
             ) {
                 requestBody.nearestStation = {
-                    name: form.nearestStationName.trim(),
+                    name:
+                        form.nearestStationName.trim(),
+
                     distanceInKm: Number(
                         form.nearestStationDistance,
                     ),
@@ -260,10 +546,16 @@ const EditPropertyModal = ({
             }
 
             if (
-                form.propertyAgeType === "EXISTING"
+                form.propertyAgeType ===
+                "EXISTING"
             ) {
                 requestBody.propertyAgeInYears =
-                    Number(form.propertyAgeInYears);
+                    Number(
+                        form.propertyAgeInYears,
+                    );
+            } else {
+                requestBody.propertyAgeInYears =
+                    undefined;
             }
 
             await axios.patch(
@@ -271,8 +563,11 @@ const EditPropertyModal = ({
                 requestBody,
                 {
                     headers: {
-                        Authorization: `Bearer ${token}`,
-                        "Content-Type": "application/json",
+                        Authorization:
+                            `Bearer ${token}`,
+
+                        "Content-Type":
+                            "application/json",
                     },
                 },
             );
@@ -284,24 +579,26 @@ const EditPropertyModal = ({
             onClose();
             onSuccess();
         } catch (error: unknown) {
-            if (axios.isAxiosError(error)) {
-                const message =
-                    error.response?.data?.message;
-
-                toast.error(
-                    Array.isArray(message)
-                        ? message[0]
-                        : message ||
-                        "Unable to update property",
-                );
-            } else {
-                toast.error(
+            toast.error(
+                getErrorMessage(
+                    error,
                     "Unable to update property",
-                );
-            }
+                ),
+            );
         } finally {
             setIsSubmitting(false);
         }
+    };
+
+    const handleClose = () => {
+        if (
+            isSubmitting ||
+            isUploadingImage
+        ) {
+            return;
+        }
+
+        onClose();
     };
 
     const inputClass =
@@ -313,7 +610,7 @@ const EditPropertyModal = ({
     return (
         <div
             className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 px-4 py-6 backdrop-blur-sm"
-            onMouseDown={onClose}
+            onMouseDown={handleClose}
         >
             <div
                 className="relative max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl sm:p-8"
@@ -323,8 +620,12 @@ const EditPropertyModal = ({
             >
                 <button
                     type="button"
-                    onClick={onClose}
-                    className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full text-xl text-gray-500 hover:bg-gray-100"
+                    onClick={handleClose}
+                    disabled={
+                        isSubmitting ||
+                        isUploadingImage
+                    }
+                    className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full text-xl text-gray-500 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                     ×
                 </button>
@@ -338,7 +639,8 @@ const EditPropertyModal = ({
                 </h2>
 
                 <p className="mt-2 text-sm text-gray-500">
-                    Update the property information below.
+                    Update property information
+                    and images.
                 </p>
 
                 <form
@@ -346,7 +648,9 @@ const EditPropertyModal = ({
                     className="mt-7 grid gap-5 sm:grid-cols-2"
                 >
                     <div className="sm:col-span-2">
-                        <label className={labelClass}>
+                        <label
+                            className={labelClass}
+                        >
                             Property name
                         </label>
 
@@ -364,12 +668,16 @@ const EditPropertyModal = ({
                     </div>
 
                     <div>
-                        <label className={labelClass}>
+                        <label
+                            className={labelClass}
+                        >
                             Listing type
                         </label>
 
                         <select
-                            value={form.listingType}
+                            value={
+                                form.listingType
+                            }
                             onChange={(event) =>
                                 updateForm(
                                     "listingType",
@@ -378,19 +686,31 @@ const EditPropertyModal = ({
                             }
                             className={inputClass}
                         >
-                            <option value="SELL">Sell</option>
-                            <option value="RENT">Rent</option>
-                            <option value="LEASE">Lease</option>
+                            <option value="SELL">
+                                Sell
+                            </option>
+
+                            <option value="RENT">
+                                Rent
+                            </option>
+
+                            <option value="LEASE">
+                                Lease
+                            </option>
                         </select>
                     </div>
 
                     <div>
-                        <label className={labelClass}>
+                        <label
+                            className={labelClass}
+                        >
                             Configuration
                         </label>
 
                         <select
-                            value={form.configuration}
+                            value={
+                                form.configuration
+                            }
                             onChange={(event) =>
                                 updateForm(
                                     "configuration",
@@ -399,11 +719,26 @@ const EditPropertyModal = ({
                             }
                             className={inputClass}
                         >
-                            <option value="1RK">1 RK</option>
-                            <option value="1BHK">1 BHK</option>
-                            <option value="2BHK">2 BHK</option>
-                            <option value="3BHK">3 BHK</option>
-                            <option value="4BHK">4 BHK</option>
+                            <option value="1RK">
+                                1 RK
+                            </option>
+
+                            <option value="1BHK">
+                                1 BHK
+                            </option>
+
+                            <option value="2BHK">
+                                2 BHK
+                            </option>
+
+                            <option value="3BHK">
+                                3 BHK
+                            </option>
+
+                            <option value="4BHK">
+                                4 BHK
+                            </option>
+
                             <option value="DUPLEX">
                                 Duplex
                             </option>
@@ -411,7 +746,9 @@ const EditPropertyModal = ({
                     </div>
 
                     <div className="sm:col-span-2">
-                        <label className={labelClass}>
+                        <label
+                            className={labelClass}
+                        >
                             Address
                         </label>
 
@@ -429,7 +766,9 @@ const EditPropertyModal = ({
                     </div>
 
                     <div>
-                        <label className={labelClass}>
+                        <label
+                            className={labelClass}
+                        >
                             City
                         </label>
 
@@ -447,7 +786,9 @@ const EditPropertyModal = ({
                     </div>
 
                     <div>
-                        <label className={labelClass}>
+                        <label
+                            className={labelClass}
+                        >
                             State
                         </label>
 
@@ -465,12 +806,16 @@ const EditPropertyModal = ({
                     </div>
 
                     <div>
-                        <label className={labelClass}>
+                        <label
+                            className={labelClass}
+                        >
                             Pincode
                         </label>
 
                         <input
                             required
+                            inputMode="numeric"
+                            pattern="[1-9][0-9]{5}"
                             maxLength={6}
                             value={form.pincode}
                             onChange={(event) =>
@@ -484,15 +829,19 @@ const EditPropertyModal = ({
                     </div>
 
                     <div>
-                        <label className={labelClass}>
+                        <label
+                            className={labelClass}
+                        >
                             Estimated price
                         </label>
 
                         <input
-                            type="number"
                             required
+                            type="number"
                             min="0"
-                            value={form.estimatedPrice}
+                            value={
+                                form.estimatedPrice
+                            }
                             onChange={(event) =>
                                 updateForm(
                                     "estimatedPrice",
@@ -504,13 +853,15 @@ const EditPropertyModal = ({
                     </div>
 
                     <div>
-                        <label className={labelClass}>
+                        <label
+                            className={labelClass}
+                        >
                             Carpet area
                         </label>
 
                         <input
-                            type="number"
                             required
+                            type="number"
                             min="1"
                             value={form.carpetArea}
                             onChange={(event) =>
@@ -524,12 +875,16 @@ const EditPropertyModal = ({
                     </div>
 
                     <div>
-                        <label className={labelClass}>
+                        <label
+                            className={labelClass}
+                        >
                             Area unit
                         </label>
 
                         <select
-                            value={form.carpetAreaUnit}
+                            value={
+                                form.carpetAreaUnit
+                            }
                             onChange={(event) =>
                                 updateForm(
                                     "carpetAreaUnit",
@@ -543,18 +898,22 @@ const EditPropertyModal = ({
                             </option>
 
                             <option value="SQ_METER">
-                                Square meters
+                                Square metres
                             </option>
                         </select>
                     </div>
 
                     <div>
-                        <label className={labelClass}>
+                        <label
+                            className={labelClass}
+                        >
                             Property age type
                         </label>
 
                         <select
-                            value={form.propertyAgeType}
+                            value={
+                                form.propertyAgeType
+                            }
                             onChange={(event) =>
                                 updateForm(
                                     "propertyAgeType",
@@ -563,7 +922,9 @@ const EditPropertyModal = ({
                             }
                             className={inputClass}
                         >
-                            <option value="NEW">New</option>
+                            <option value="NEW">
+                                New
+                            </option>
 
                             <option value="UNDER_CONSTRUCTION">
                                 Under construction
@@ -578,35 +939,48 @@ const EditPropertyModal = ({
                     {form.propertyAgeType ===
                         "EXISTING" && (
                             <div>
-                                <label className={labelClass}>
+                                <label
+                                    className={
+                                        labelClass
+                                    }
+                                >
                                     Age in years
                                 </label>
 
                                 <input
-                                    type="number"
                                     required
+                                    type="number"
                                     min="0"
                                     value={
                                         form.propertyAgeInYears
                                     }
-                                    onChange={(event) =>
+                                    onChange={(
+                                        event,
+                                    ) =>
                                         updateForm(
                                             "propertyAgeInYears",
-                                            event.target.value,
+                                            event.target
+                                                .value,
                                         )
                                     }
-                                    className={inputClass}
+                                    className={
+                                        inputClass
+                                    }
                                 />
                             </div>
                         )}
 
                     <div>
-                        <label className={labelClass}>
+                        <label
+                            className={labelClass}
+                        >
                             Nearest station
                         </label>
 
                         <input
-                            value={form.nearestStationName}
+                            value={
+                                form.nearestStationName
+                            }
                             onChange={(event) =>
                                 updateForm(
                                     "nearestStationName",
@@ -618,7 +992,9 @@ const EditPropertyModal = ({
                     </div>
 
                     <div>
-                        <label className={labelClass}>
+                        <label
+                            className={labelClass}
+                        >
                             Distance in km
                         </label>
 
@@ -640,7 +1016,9 @@ const EditPropertyModal = ({
                     </div>
 
                     <div className="sm:col-span-2">
-                        <label className={labelClass}>
+                        <label
+                            className={labelClass}
+                        >
                             Benefits
                         </label>
 
@@ -648,12 +1026,14 @@ const EditPropertyModal = ({
                             {availableBenefits.map(
                                 (benefit) => (
                                     <label
-                                        key={benefit}
+                                        key={
+                                            benefit
+                                        }
                                         className={`cursor-pointer rounded-full border px-4 py-2 text-sm font-medium ${form.benefits.includes(
                                             benefit,
                                         )
-                                            ? "border-red-600 bg-red-50 text-red-600"
-                                            : "border-gray-200 text-gray-600"
+                                                ? "border-red-600 bg-red-50 text-red-600"
+                                                : "border-gray-200 text-gray-600"
                                             }`}
                                     >
                                         <input
@@ -669,40 +1049,175 @@ const EditPropertyModal = ({
                                             className="hidden"
                                         />
 
-                                        {benefit.replaceAll("_", " ")}
+                                        {benefit.replaceAll(
+                                            "_",
+                                            " ",
+                                        )}
                                     </label>
                                 ),
                             )}
                         </div>
                     </div>
 
+                    {/* Property images */}
                     <div className="sm:col-span-2">
-                        <label className={labelClass}>
-                            Image URLs
+                        <div className="mb-2 flex items-center justify-between">
+                            <label
+                                className={
+                                    labelClass
+                                }
+                            >
+                                Property images
+                            </label>
+
+                            <span className="text-xs font-medium text-gray-500">
+                                {
+                                    uploadedImages.length
+                                }
+                                /5 images
+                            </span>
+                        </div>
+
+                        {uploadedImages.length >
+                            0 && (
+                                <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
+                                    {uploadedImages.map(
+                                        (
+                                            imageUrl,
+                                            index,
+                                        ) => (
+                                            <div
+                                                key={`${imageUrl}-${index}`}
+                                                className="relative overflow-hidden rounded-xl border border-gray-200 bg-gray-100"
+                                            >
+                                                <img
+                                                    src={
+                                                        imageUrl
+                                                    }
+                                                    alt={`Property ${index + 1}`}
+                                                    className="h-28 w-full object-cover"
+                                                />
+
+                                                {index ===
+                                                    0 && (
+                                                        <span className="absolute bottom-2 left-2 rounded-md bg-red-600 px-2 py-1 text-[10px] font-semibold text-white">
+                                                            Cover
+                                                        </span>
+                                                    )}
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        removeImage(
+                                                            index,
+                                                        )
+                                                    }
+                                                    disabled={
+                                                        isSubmitting ||
+                                                        isUploadingImage
+                                                    }
+                                                    className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 text-sm text-white hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                                                    aria-label={`Remove image ${index + 1}`}
+                                                >
+                                                    ×
+                                                </button>
+                                            </div>
+                                        ),
+                                    )}
+                                </div>
+                            )}
+
+                        <label
+                            className={`flex items-center justify-center rounded-xl border-2 border-dashed px-5 py-7 text-center transition ${uploadedImages.length >=
+                                    5 ||
+                                    isUploadingImage
+                                    ? "cursor-not-allowed border-gray-200 bg-gray-50 opacity-60"
+                                    : "cursor-pointer border-red-200 bg-red-50/50 hover:border-red-400 hover:bg-red-50"
+                                }`}
+                        >
+                            <input
+                                type="file"
+                                accept="image/jpeg,image/png,image/webp"
+                                onChange={
+                                    handleImageUpload
+                                }
+                                disabled={
+                                    uploadedImages.length >=
+                                    5 ||
+                                    isUploadingImage
+                                }
+                                className="hidden"
+                            />
+
+                            <div>
+                                {isUploadingImage ? (
+                                    <div className="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-red-100 border-t-red-600" />
+                                ) : (
+                                    <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-white text-2xl text-red-600 shadow-sm">
+                                        +
+                                    </div>
+                                )}
+
+                                <p className="mt-3 text-sm font-semibold text-gray-800">
+                                    {isUploadingImage
+                                        ? "Uploading image..."
+                                        : uploadedImages.length >=
+                                            5
+                                            ? "Maximum 5 images reached"
+                                            : "Upload another image"}
+                                </p>
+
+                                <p className="mt-1 text-xs text-gray-500">
+                                    JPG, PNG or WebP,
+                                    maximum 5 MB
+                                </p>
+                            </div>
+                        </label>
+
+                        {uploadedImages.length ===
+                            0 && (
+                                <p className="mt-2 text-xs text-red-600">
+                                    At least one image is
+                                    required.
+                                </p>
+                            )}
+                    </div>
+
+                    <div className="sm:col-span-2">
+                        <label
+                            className={labelClass}
+                        >
+                            Google Maps location
                         </label>
 
                         <input
-                            value={form.imageUrls}
+                            value={
+                                form.googleMapLocation
+                            }
                             onChange={(event) =>
                                 updateForm(
-                                    "imageUrls",
+                                    "googleMapLocation",
                                     event.target.value,
                                 )
                             }
-                            placeholder="Separate URLs with commas"
+                            placeholder="Google Maps URL"
                             className={inputClass}
                         />
                     </div>
 
                     <div className="sm:col-span-2">
-                        <label className={labelClass}>
+                        <label
+                            className={labelClass}
+                        >
                             Description
                         </label>
 
                         <textarea
                             required
                             rows={4}
-                            value={form.description}
+                            value={
+                                form.description
+                            }
                             onChange={(event) =>
                                 updateForm(
                                     "description",
@@ -716,11 +1231,14 @@ const EditPropertyModal = ({
                     <label className="flex items-center gap-3 sm:col-span-2">
                         <input
                             type="checkbox"
-                            checked={form.negotiable}
+                            checked={
+                                form.negotiable
+                            }
                             onChange={(event) =>
                                 updateForm(
                                     "negotiable",
-                                    event.target.checked,
+                                    event.target
+                                        .checked,
                                 )
                             }
                             className="h-5 w-5 accent-red-600"
@@ -734,21 +1252,31 @@ const EditPropertyModal = ({
                     <div className="flex justify-end gap-3 border-t border-gray-100 pt-5 sm:col-span-2">
                         <button
                             type="button"
-                            onClick={onClose}
-                            disabled={isSubmitting}
-                            className="rounded-xl border border-gray-200 px-6 py-3 font-semibold"
+                            onClick={handleClose}
+                            disabled={
+                                isSubmitting ||
+                                isUploadingImage
+                            }
+                            className="rounded-xl border border-gray-200 px-6 py-3 font-semibold disabled:cursor-not-allowed disabled:opacity-60"
                         >
                             Cancel
                         </button>
 
                         <button
                             type="submit"
-                            disabled={isSubmitting}
-                            className="rounded-xl bg-red-600 px-6 py-3 font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+                            disabled={
+                                isSubmitting ||
+                                isUploadingImage ||
+                                uploadedImages.length ===
+                                0
+                            }
+                            className="rounded-xl bg-red-600 px-6 py-3 font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                             {isSubmitting
                                 ? "Updating..."
-                                : "Save Changes"}
+                                : isUploadingImage
+                                    ? "Uploading image..."
+                                    : "Save Changes"}
                         </button>
                     </div>
                 </form>

@@ -9,6 +9,7 @@ import EditPropertyModal, {
 } from "./EditPropertyModal";
 import AddPropertyModal from "./AddPropertyModal";
 import DeletePropertyModal from "./DeletePropertyModal";
+import { useNavigate } from "react-router-dom";
 
 type PropertyAddress = {
     address: string;
@@ -53,6 +54,7 @@ const API_URL =
     "http://localhost:4000";
 
 const PropertiesSection = () => {
+    const navigate = useNavigate();
     const [properties, setProperties] = useState<
         Property[]
     >([]);
@@ -314,7 +316,7 @@ const PropertiesSection = () => {
                                                 </p>
                                             )}
 
-                                            <div className="mt-5 grid grid-cols-2 gap-3 border-t border-gray-100 pt-5">
+                                            <div className="mt-5 grid grid-cols-3 gap-3 border-t border-gray-100 pt-5">
                                                 <button
                                                     type="button"
                                                     onClick={() =>
@@ -324,7 +326,15 @@ const PropertiesSection = () => {
                                                 >
                                                     Edit
                                                 </button>
-
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        navigate(`/properties/${property._id}`)
+                                                    }
+                                                    className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:border-red-200 hover:text-red-600"
+                                                >
+                                                    View details
+                                                </button>
                                                 <button
                                                     type="button"
                                                     onClick={() =>
