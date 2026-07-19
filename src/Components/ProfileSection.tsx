@@ -74,7 +74,7 @@ const ProfileSection = () => {
                 }
 
                 const response = await axios.get(
-                    `${API_URL}/agent/`,
+                    `${API_URL}/agent`,
                     {
                         headers: {
                             Authorization: `Bearer ${token}`,
