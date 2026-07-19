@@ -2,7 +2,7 @@
     "rewrites": [
         {
             "source": "/api/:path*",
-            "destination": "http://property-env.eba-example.ap-south-1.elasticbeanstalk.com/:path*"
+            "destination": "http://property-env.eba-dhsg3mry.ap-south-1.elasticbeanstalk.com/:path*"
         },
         {
             "source": "/(.*)",
