@@ -6,7 +6,7 @@ import {
 } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
-
+import { Eye, EyeOff } from "lucide-react";
 type AuthMode = "login" | "signup";
 
 type AuthModalProps = {
@@ -36,6 +36,9 @@ const AuthModal = ({
         email: "",
         password: "",
     });
+
+    const [showPassword, setShowPassword] =
+        useState(false);
 
     const [signupForm, setSignupForm] = useState({
         name: "",
@@ -291,19 +294,47 @@ const AuthModal = ({
                             className={inputClass}
                         />
 
-                        <input
-                            type="password"
-                            required
-                            placeholder="Password"
-                            value={loginForm.password}
-                            onChange={(event) =>
-                                setLoginForm((current) => ({
-                                    ...current,
-                                    password: event.target.value,
-                                }))
-                            }
-                            className={inputClass}
-                        />
+                        <div className="relative">
+                            <input
+                                type={
+                                    showPassword
+                                        ? "text"
+                                        : "password"
+                                }
+                                required
+                                placeholder="Password"
+                                value={loginForm.password}
+                                onChange={(event) =>
+                                    setLoginForm((current) => ({
+                                        ...current,
+                                        password:
+                                            event.target.value,
+                                    }))
+                                }
+                                className={`${inputClass} pr-12`}
+                            />
+
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    setShowPassword(
+                                        (current) => !current,
+                                    )
+                                }
+                                className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-gray-400 transition hover:text-red-600"
+                                aria-label={
+                                    showPassword
+                                        ? "Hide password"
+                                        : "Show password"
+                                }
+                            >
+                                {showPassword ? (
+                                    <EyeOff size={20} />
+                                ) : (
+                                    <Eye size={20} />
+                                )}
+                            </button>
+                        </div>
 
                         <button
                             type="submit"
