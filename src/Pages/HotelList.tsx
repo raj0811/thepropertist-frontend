@@ -14,8 +14,10 @@ const API_URL = "http://localhost:4000/api/hotels";
 export default function HotelList() {
     const [hotels, setHotels] = useState<Hotel[]>([]);
     const [city, setCity] = useState("delhi");
-    const [minPrice, setMinPrice] = useState("5000");
-    const [maxPrice, setMaxPrice] = useState("7000");
+    const [minPrice, setMinPrice] = useState("");
+    const [maxPrice, setMaxPrice] = useState("");
+    const [sortOrder, setSortOrder] = useState("default");
+
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
 
@@ -23,10 +25,10 @@ export default function HotelList() {
         try {
             setError("");
 
-            const min = Number(minPrice);
-            const max = Number(maxPrice);
+            const min = minPrice ? Number(minPrice) : undefined;
+            const max = maxPrice ? Number(maxPrice) : undefined;
 
-            if (min > max) {
+            if (min !== undefined && max !== undefined && min > max) {
                 setError("Minimum price cannot be greater than maximum price.");
                 setHotels([]);
                 return;
@@ -34,19 +36,27 @@ export default function HotelList() {
 
             setLoading(true);
 
-            const params = new URLSearchParams({
-                city,
-                minPrice,
-                maxPrice,
-            });
+            const params = new URLSearchParams();
 
-            const response = await fetch(`${API_URL}?${params}`);
+            if (city.trim()) {
+                params.append("city", city.trim());
+            }
+
+            if (minPrice) {
+                params.append("minPrice", minPrice);
+            }
+
+            if (maxPrice) {
+                params.append("maxPrice", maxPrice);
+            }
+
+            const response = await fetch(`${API_URL}?${params.toString()}`);
 
             if (!response.ok) {
                 throw new Error("Failed to fetch hotels");
             }
 
-            const data = await response.json();
+            const data: Hotel[] = await response.json();
 
             setHotels(data);
         } catch (error) {
@@ -62,6 +72,18 @@ export default function HotelList() {
         fetchHotels();
     }, []);
 
+    const resetFilters = () => {
+        setCity("delhi");
+        setMinPrice("");
+        setMaxPrice("");
+        setSortOrder("default");
+        setError("");
+
+        setTimeout(() => {
+            fetchHotels();
+        }, 0);
+    };
+
     const formatPrice = (price: number) => {
         return new Intl.NumberFormat("en-IN", {
             style: "currency",
@@ -70,27 +92,51 @@ export default function HotelList() {
         }).format(price);
     };
 
+    const sortedHotels = [...hotels].sort((a, b) => {
+        if (sortOrder === "asc") {
+            return a.price - b.price;
+        }
+
+        if (sortOrder === "desc") {
+            return b.price - a.price;
+        }
+
+        return 0;
+    });
+
     return (
-        <div className="min-h-screen bg-slate-50 px-4 py-8 sm:px-6 lg:px-8">
-            <div className="mx-auto max-w-7xl">
-                {/* Header */}
-                <div className="mb-8">
-                    <p className="mb-2 text-sm font-semibold uppercase tracking-wider text-indigo-600">
+        <div className="min-h-screen bg-slate-50">
+            {/* Header */}
+            <header className="border-b border-slate-200 bg-white">
+                <div className="mx-auto max-w-7xl px-6 py-5">
+                    <p className="text-sm font-semibold uppercase tracking-wider text-indigo-600">
                         Hotel Offer Orchestrator
                     </p>
 
-                    <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-                        Find your perfect hotel
+                    <h1 className="mt-1 text-2xl font-bold text-slate-900">
+                        Hotel Offers
                     </h1>
 
-                    <p className="mt-2 text-slate-500">
+                    <p className="mt-1 text-sm text-slate-500">
                         Compare hotel offers from multiple suppliers.
                     </p>
                 </div>
+            </header>
 
+            <main className="mx-auto max-w-7xl px-6 py-8">
                 {/* Filters */}
-                <div className="mb-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <div className="grid gap-4 md:grid-cols-4">
+                <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <div className="mb-4">
+                        <h2 className="text-lg font-semibold text-slate-900">
+                            Search Hotels
+                        </h2>
+
+                        <p className="mt-1 text-sm text-slate-500">
+                            Filter hotel offers by city and optional price range.
+                        </p>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-5">
                         {/* City */}
                         <div>
                             <label className="mb-2 block text-sm font-medium text-slate-700">
@@ -101,12 +147,12 @@ export default function HotelList() {
                                 type="text"
                                 value={city}
                                 onChange={(e) => setCity(e.target.value)}
-                                placeholder="Enter city"
-                                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                                placeholder="e.g. Delhi"
+                                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
                             />
                         </div>
 
-                        {/* Min Price */}
+                        {/* Minimum Price */}
                         <div>
                             <label className="mb-2 block text-sm font-medium text-slate-700">
                                 Minimum Price
@@ -114,14 +160,18 @@ export default function HotelList() {
 
                             <input
                                 type="number"
+                                min="0"
                                 value={minPrice}
                                 onChange={(e) => setMinPrice(e.target.value)}
-                                placeholder="5000"
-                                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                                placeholder="No minimum"
+                                className={`w-full rounded-xl border bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:ring-2 ${error
+                                        ? "border-red-300 focus:border-red-500 focus:ring-red-100"
+                                        : "border-slate-300 focus:border-indigo-500 focus:ring-indigo-100"
+                                    }`}
                             />
                         </div>
 
-                        {/* Max Price */}
+                        {/* Maximum Price */}
                         <div>
                             <label className="mb-2 block text-sm font-medium text-slate-700">
                                 Maximum Price
@@ -129,115 +179,242 @@ export default function HotelList() {
 
                             <input
                                 type="number"
+                                min="0"
                                 value={maxPrice}
                                 onChange={(e) => setMaxPrice(e.target.value)}
-                                placeholder="7000"
-                                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                                placeholder="No maximum"
+                                className={`w-full rounded-xl border bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:ring-2 ${error
+                                        ? "border-red-300 focus:border-red-500 focus:ring-red-100"
+                                        : "border-slate-300 focus:border-indigo-500 focus:ring-indigo-100"
+                                    }`}
                             />
                         </div>
 
-                        {/* Search */}
-                        <div className="flex items-end">
+                        {/* Sort */}
+                        <div>
+                            <label className="mb-2 block text-sm font-medium text-slate-700">
+                                Sort By
+                            </label>
+
+                            <select
+                                value={sortOrder}
+                                onChange={(e) => setSortOrder(e.target.value)}
+                                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                            >
+                                <option value="default">Default</option>
+                                <option value="asc">
+                                    Price: Low to High
+                                </option>
+                                <option value="desc">
+                                    Price: High to Low
+                                </option>
+                            </select>
+                        </div>
+
+                        {/* Buttons */}
+                        <div className="flex items-end gap-2">
                             <button
+                                type="button"
                                 onClick={fetchHotels}
                                 disabled={loading}
-                                className="w-full rounded-xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                className="flex-1 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
                             >
-                                {loading ? "Searching..." : "Search Hotels"}
+                                {loading ? "Searching..." : "Search"}
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={resetFilters}
+                                disabled={loading}
+                                className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                Reset
                             </button>
                         </div>
                     </div>
+
+                    {/* Error */}
+                    {error && (
+                        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                            ⚠ {error}
+                        </div>
+                    )}
                 </div>
 
-                {/* Result Header */}
-                <div className="mb-5 flex items-center justify-between">
+                {/* Results Header */}
+                <div className="mb-4 flex items-end justify-between">
                     <div>
-                        <h2 className="text-xl font-bold text-slate-900">
+                        <h2 className="text-lg font-semibold text-slate-900">
                             Available Hotels
                         </h2>
 
                         {!loading && (
                             <p className="mt-1 text-sm text-slate-500">
-                                {hotels.length} hotels found in{" "}
-                                <span className="font-medium capitalize">{city}</span>
+                                {sortedHotels.length}{" "}
+                                {sortedHotels.length === 1
+                                    ? "hotel"
+                                    : "hotels"}{" "}
+                                found in{" "}
+                                <span className="font-medium capitalize text-slate-700">
+                                    {city || "all cities"}
+                                </span>
                             </p>
                         )}
                     </div>
-                </div>
 
-                {/* Error */}
-                {error && (
-                    <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                        {error}
-                    </div>
-                )}
+                    {!loading && sortedHotels.length > 0 && (
+                        <div className="hidden rounded-lg bg-slate-100 px-3 py-2 text-xs font-medium text-slate-600 sm:block">
+                            {sortOrder === "asc"
+                                ? "Price: Low to High"
+                                : sortOrder === "desc"
+                                    ? "Price: High to Low"
+                                    : "Default order"}
+                        </div>
+                    )}
+                </div>
 
                 {/* Loading */}
                 {loading && (
-                    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                        {[1, 2, 3, 4, 5, 6].map((item) => (
-                            <div
-                                key={item}
-                                className="h-64 animate-pulse rounded-2xl bg-slate-200"
-                            />
-                        ))}
+                    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                        <div className="animate-pulse">
+                            {[1, 2, 3, 4, 5].map((item) => (
+                                <div
+                                    key={item}
+                                    className="flex gap-6 border-b border-slate-100 p-5 last:border-0"
+                                >
+                                    <div className="h-5 w-32 rounded bg-slate-200" />
+                                    <div className="h-5 w-24 rounded bg-slate-200" />
+                                    <div className="h-5 w-24 rounded bg-slate-200" />
+                                    <div className="h-5 w-20 rounded bg-slate-200" />
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 )}
 
-                {/* Hotels */}
-                {!loading && hotels.length > 0 && (
-                    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                        {hotels.map((hotel) => (
-                            <div
-                                key={hotel.hotelId}
-                                className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-lg"
-                            >
-                                {/* Hotel Image Placeholder */}
-                                <div className="relative flex h-40 items-center justify-center bg-gradient-to-br from-indigo-500 to-violet-600">
-                                    <span className="text-5xl">🏨</span>
+                {/* Hotel Table */}
+                {!loading && sortedHotels.length > 0 && (
+                    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                        <div className="overflow-x-auto">
+                            <table className="w-full min-w-[800px] text-left">
+                                <thead>
+                                    <tr className="border-b border-slate-200 bg-slate-50">
+                                        <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                            Hotel
+                                        </th>
 
-                                    <span className="absolute right-3 top-3 rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700">
-                                        {hotel.supplier}
-                                    </span>
-                                </div>
+                                        <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                            City
+                                        </th>
 
-                                {/* Content */}
-                                <div className="p-5">
-                                    <div className="mb-4">
-                                        <h3 className="text-lg font-bold text-slate-900">
-                                            {hotel.name}
-                                        </h3>
+                                        <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                            Supplier
+                                        </th>
 
-                                        <p className="mt-1 text-sm capitalize text-slate-500">
-                                            📍 {hotel.city}
-                                        </p>
-                                    </div>
+                                        <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                            Price
+                                        </th>
 
-                                    <div className="flex items-end justify-between border-t border-slate-100 pt-4">
-                                        <div>
-                                            <p className="text-xs text-slate-500">Price per night</p>
+                                        <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                            Commission
+                                        </th>
 
-                                            <p className="mt-1 text-xl font-bold text-indigo-600">
-                                                {formatPrice(hotel.price)}
-                                            </p>
-                                        </div>
+                                        <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                            Hotel ID
+                                        </th>
+                                    </tr>
+                                </thead>
 
-                                        <div className="text-right">
-                                            <p className="text-xs text-slate-500">Commission</p>
+                                <tbody className="divide-y divide-slate-100">
+                                    {sortedHotels.map((hotel) => (
+                                        <tr
+                                            key={hotel.hotelId}
+                                            className="transition hover:bg-slate-50"
+                                        >
+                                            {/* Hotel */}
+                                            <td className="px-6 py-5">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-lg">
+                                                        🏨
+                                                    </div>
 
-                                            <p className="mt-1 text-sm font-semibold text-emerald-600">
-                                                {hotel.commissionPct}%
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
+                                                    <div>
+                                                        <p className="font-semibold text-slate-900">
+                                                            {hotel.name}
+                                                        </p>
+
+                                                        <p className="mt-0.5 text-xs text-slate-400">
+                                                            Hotel offer
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </td>
+
+                                            {/* City */}
+                                            <td className="px-6 py-5">
+                                                <span className="capitalize text-sm text-slate-600">
+                                                    {hotel.city}
+                                                </span>
+                                            </td>
+
+                                            {/* Supplier */}
+                                            <td className="px-6 py-5">
+                                                <span
+                                                    className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${hotel.supplier ===
+                                                            "Supplier A"
+                                                            ? "bg-blue-50 text-blue-700"
+                                                            : "bg-purple-50 text-purple-700"
+                                                        }`}
+                                                >
+                                                    {hotel.supplier}
+                                                </span>
+                                            </td>
+
+                                            {/* Price */}
+                                            <td className="px-6 py-5">
+                                                <span className="text-base font-bold text-slate-900">
+                                                    {formatPrice(hotel.price)}
+                                                </span>
+
+                                                <p className="mt-0.5 text-xs text-slate-400">
+                                                    per night
+                                                </p>
+                                            </td>
+
+                                            {/* Commission */}
+                                            <td className="px-6 py-5">
+                                                <span className="font-semibold text-emerald-600">
+                                                    {hotel.commissionPct}%
+                                                </span>
+                                            </td>
+
+                                            {/* Hotel ID */}
+                                            <td className="px-6 py-5">
+                                                <code className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-600">
+                                                    {hotel.hotelId}
+                                                </code>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="border-t border-slate-200 bg-slate-50 px-6 py-3">
+                            <p className="text-xs text-slate-500">
+                                Showing{" "}
+                                <span className="font-semibold text-slate-700">
+                                    {sortedHotels.length}
+                                </span>{" "}
+                                hotel offers
+                            </p>
+                        </div>
                     </div>
                 )}
 
-                {/* Empty */}
-                {!loading && !error && hotels.length === 0 && (
+                {/* Empty State */}
+                {!loading && !error && sortedHotels.length === 0 && (
                     <div className="rounded-2xl border border-dashed border-slate-300 bg-white py-16 text-center">
                         <div className="text-4xl">🏨</div>
 
@@ -250,7 +427,7 @@ export default function HotelList() {
                         </p>
                     </div>
                 )}
-            </div>
+            </main>
         </div>
     );
 }
